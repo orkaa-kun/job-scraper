@@ -1,7 +1,11 @@
 import requests
 import pandas as pd
+import json
+import os
+
 from bs4 import BeautifulSoup
 from datetime import datetime
+from collections import Counter
 
 
 def scrape_jobs(keyword):
@@ -16,7 +20,7 @@ def scrape_jobs(keyword):
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
-        print(f"Error accessing website: {e}")
+        print(f"\nError accessing website: {e}")
         return []
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -33,12 +37,13 @@ def scrape_jobs(keyword):
         link_tag = job.find("a")
 
         title = title_tag.text.strip() if title_tag else "N/A"
-
-        if keyword.lower() not in title.lower():
-            continue
-
         company = company_tag.text.strip() if company_tag else "N/A"
         location = location_tag.text.strip() if location_tag else "N/A"
+
+        search_text = f"{title} {company} {location}"
+
+        if keyword.lower() not in search_text.lower():
+            continue
 
         apply_link = (
             link_tag.get("href", "N/A")
@@ -52,30 +57,56 @@ def scrape_jobs(keyword):
             "apply_link": apply_link
         })
 
+    jobs.sort(key=lambda job: job["company"])
+
     return jobs
 
 
 def save_jobs(jobs, keyword):
     """
-    Save jobs to CSV and Excel files.
+    Save jobs to CSV, Excel, and JSON files.
     """
 
-    df = pd.DataFrame(jobs)
+    output_folder = "output"
+    os.makedirs(output_folder, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    csv_file = f"{keyword}_{timestamp}.csv"
-    excel_file = f"{keyword}_{timestamp}.xlsx"
+    csv_file = os.path.join(
+        output_folder,
+        f"{keyword}_{timestamp}.csv"
+    )
+
+    excel_file = os.path.join(
+        output_folder,
+        f"{keyword}_{timestamp}.xlsx"
+    )
+
+    json_file = os.path.join(
+        output_folder,
+        f"{keyword}_{timestamp}.json"
+    )
+
+    df = pd.DataFrame(jobs)
 
     df.to_csv(csv_file, index=False)
     df.to_excel(excel_file, index=False)
+
+    with open(json_file, "w", encoding="utf-8") as file:
+        json.dump(
+            jobs,
+            file,
+            indent=4,
+            ensure_ascii=False
+        )
 
     print("\nFILES CREATED")
     print("-" * 40)
     print(csv_file)
     print(excel_file)
+    print(json_file)
 
-    return csv_file, excel_file
+    return csv_file, excel_file, json_file
 
 
 def show_summary(jobs, keyword):
@@ -89,15 +120,27 @@ def show_summary(jobs, keyword):
     print(f"Keyword searched : {keyword}")
     print(f"Jobs found       : {len(jobs)}")
 
-    companies = {job["company"] for job in jobs}
+    companies = [job["company"] for job in jobs]
 
-    print(f"Unique companies : {len(companies)}")
+    print(f"Unique companies : {len(set(companies))}")
+
+    if companies:
+
+        company_counts = Counter(companies)
+
+        print("\nTop Companies")
+        print("-" * 40)
+
+        for company, count in company_counts.most_common(5):
+            print(f"{company}: {count}")
 
     if jobs:
+
         print("\nSample Results")
         print("-" * 40)
 
         for job in jobs[:5]:
+
             print(f"Title    : {job['title']}")
             print(f"Company  : {job['company']}")
             print(f"Location : {job['location']}")
@@ -119,7 +162,7 @@ def main():
     jobs = scrape_jobs(keyword)
 
     if not jobs:
-        print(f"No jobs found matching '{keyword}'")
+        print(f"\nNo jobs found matching '{keyword}'")
         return
 
     save_jobs(jobs, keyword)
