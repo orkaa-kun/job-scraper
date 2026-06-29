@@ -1,26 +1,30 @@
-import requests
-import pandas as pd
 import json
 import os
-
-from bs4 import BeautifulSoup
-from datetime import datetime
 from collections import Counter
+from datetime import datetime
+
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 
 
 def scrape_jobs(keyword):
     """
-    Scrape jobs from the website and filter by keyword.
+    Scrape jobs from the website and filter them using the given keyword.
     """
 
     url = "https://realpython.github.io/fake-jobs/"
 
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
-    except requests.exceptions.RequestException as e:
-        print(f"\nError accessing website: {e}")
+    except requests.exceptions.RequestException as error:
+        print(f"\nError accessing website:\n{error}")
         return []
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -36,86 +40,88 @@ def scrape_jobs(keyword):
         location_tag = job.find("p", class_="location")
         link_tag = job.find("a")
 
-        title = title_tag.text.strip() if title_tag else "N/A"
-        company = company_tag.text.strip() if company_tag else "N/A"
-        location = location_tag.text.strip() if location_tag else "N/A"
-
-        search_text = f"{title} {company} {location}"
-
-        if keyword.lower() not in search_text.lower():
-            continue
+        title = title_tag.get_text(strip=True) if title_tag else "N/A"
+        company = company_tag.get_text(strip=True) if company_tag else "N/A"
+        location = location_tag.get_text(strip=True) if location_tag else "N/A"
 
         apply_link = (
             link_tag.get("href", "N/A")
-            if link_tag else "N/A"
+            if link_tag
+            else "N/A"
         )
 
-        jobs.append({
-            "title": title,
-            "company": company,
-            "location": location,
-            "apply_link": apply_link
-        })
+        searchable_text = f"{title} {company} {location}"
 
-    jobs.sort(key=lambda job: job["company"])
+        if keyword.lower() not in searchable_text.lower():
+            continue
+
+        jobs.append(
+            {
+                "title": title,
+                "company": company,
+                "location": location,
+                "apply_link": apply_link,
+            }
+        )
+
+    jobs.sort(key=lambda job: (job["company"], job["title"]))
 
     return jobs
 
 
 def save_jobs(jobs, keyword):
     """
-    Save jobs to CSV, Excel, and JSON files.
+    Save job data to CSV, Excel and JSON.
     """
 
-    output_folder = "output"
-    os.makedirs(output_folder, exist_ok=True)
+    os.makedirs("output", exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     csv_file = os.path.join(
-        output_folder,
-        f"{keyword}_{timestamp}.csv"
+        "output",
+        f"{keyword}_{timestamp}.csv",
     )
 
     excel_file = os.path.join(
-        output_folder,
-        f"{keyword}_{timestamp}.xlsx"
+        "output",
+        f"{keyword}_{timestamp}.xlsx",
     )
 
     json_file = os.path.join(
-        output_folder,
-        f"{keyword}_{timestamp}.json"
+        "output",
+        f"{keyword}_{timestamp}.json",
     )
 
-    df = pd.DataFrame(jobs)
+    dataframe = pd.DataFrame(jobs)
 
-    df.to_csv(csv_file, index=False)
-    df.to_excel(excel_file, index=False)
+    dataframe.to_csv(csv_file, index=False)
+
+    dataframe.to_excel(excel_file, index=False)
 
     with open(json_file, "w", encoding="utf-8") as file:
         json.dump(
             jobs,
             file,
             indent=4,
-            ensure_ascii=False
+            ensure_ascii=False,
         )
 
-    print("\nFILES CREATED")
-    print("-" * 40)
+    print("\nFiles created successfully")
+    print("-" * 45)
     print(csv_file)
     print(excel_file)
     print(json_file)
 
-    return csv_file, excel_file, json_file
-
 
 def show_summary(jobs, keyword):
     """
-    Display summary statistics.
+    Display scraping statistics.
     """
 
-    print("\nSCRAPING SUMMARY")
-    print("-" * 40)
+    print("\n" + "=" * 50)
+    print("SCRAPING SUMMARY")
+    print("=" * 50)
 
     print(f"Keyword searched : {keyword}")
     print(f"Jobs found       : {len(jobs)}")
@@ -126,25 +132,24 @@ def show_summary(jobs, keyword):
 
     if companies:
 
-        company_counts = Counter(companies)
-
         print("\nTop Companies")
-        print("-" * 40)
+        print("-" * 45)
 
-        for company, count in company_counts.most_common(5):
-            print(f"{company}: {count}")
+        counts = Counter(companies)
 
-    if jobs:
+        for company, total in counts.most_common(5):
+            print(f"{company:<35} {total}")
 
-        print("\nSample Results")
-        print("-" * 40)
+    print("\nFirst Five Results")
+    print("-" * 45)
 
-        for job in jobs[:5]:
+    for index, job in enumerate(jobs[:5], start=1):
 
-            print(f"Title    : {job['title']}")
-            print(f"Company  : {job['company']}")
-            print(f"Location : {job['location']}")
-            print()
+        print(f"\nJob #{index}")
+        print(f"Title      : {job['title']}")
+        print(f"Company    : {job['company']}")
+        print(f"Location   : {job['location']}")
+        print(f"Apply Link : {job['apply_link']}")
 
 
 def main():
