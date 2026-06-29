@@ -150,7 +150,7 @@ def show_summary(jobs, keyword):
 def main():
 
     print("=" * 50)
-    print("JOB SCRAPER")
+    print("PYTHON JOB SCRAPER")
     print("=" * 50)
 
     keyword = input("Enter keyword: ").strip()
